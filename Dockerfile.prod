@@ -1,0 +1,30 @@
+# Etapa de dependencias (produce node_modules sin devDependencies)
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Etapa final (runtime)
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# curl para healthcheck
+RUN apk add --no-cache curl
+
+# Copiamos dependencias y código
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+EXPOSE 3000
+
+# Healthcheck sobre /health
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -fsS http://localhost:3000/health || exit 1
+
+# Usuario no root (opcional, quítalo si usas puertos <1024 o necesitas permisos especiales)
+USER node
+
+CMD ["node", "src/index.js"]
